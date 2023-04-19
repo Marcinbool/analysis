@@ -1,0 +1,211 @@
+---
+title: "Regresja i analiza wariancji - Sprawozdanie 2"
+author:
+  name: Marcin Ból
+  affiliation: Politechnika Krakowska
+subtitle: Analiza wariancji - sprawozdanie
+output:
+  html_document:
+    df_print: paged
+---
+
+# Termin Oddania: 10.05.2022 23:59
+
+
+```{r}
+library(tidyverse)
+```
+
+# Zadanie 1
+
+Zarząd firmy "Firma na A", która zajmuje się, między innymi sprzedażą telefonów komórkowych zastanawia się nad zmianą szaty graficznej strony, na której można dokonać zakupu ich flagowego smartfona. Przygotowali dwie nowe szaty graficzne dla strony, jedna z dużym, prostokątnym, czerwonym guzikiem "kup teraz", druga z dużym, okrągłym, srebrnym guzikiem kup teraz. Za pomocą standardowej metodologii testu A/B/C kierowali z jednakowym prawdopodobieństwem nowych użytkowników na jedną z 3 stron. Przez 30 dni mierzyli co 6 godzin ilość sprzedanych sztuk smartfona dla każdej z wersji. Waszym zadaniem jest zbadanie za pomocą poznanych metod (analizy wariancji i jej różnych modyfikacji) odpowiedź na pytanie, czy nowe szaty graficzne miały wpływ na sprzedaż, a jeśli tak to która z szat jest najlepsza.
+
+Opis danych:
+
+version - 1 - stara, 2 - prostokąt, 3 - kółko
+
+sales - ilość sprzedanych sztuk
+
+```{r}
+sites <- readr::read_csv('zadanie1.csv')
+head(sites)
+```
+
+```{r}
+sites <- sites %>% dplyr::mutate(version = as.character(version))
+```
+
+Najpierw sprawdzam założenia analizy wariancji, a mianowicie, czy wariancja w każdej z grup jest równa oraz czy dane pochodzą z rozkładów normalnych.
+
+```{r}
+bartlett.test(sales ~ version, data = sites)
+```
+
+p-wartość jest większa niż 0.05, więc mogę przyjąć, że wariancje między grupami są równe.
+Sprawdzam teraz normalność danych z każdej grupy testem Shapiro-Wilka.
+
+```{r}
+shapiro.test(sites$sales[sites$version == '1'])
+```
+```{r}
+shapiro.test(sites$sales[sites$version == '2'])
+```
+
+```{r}
+shapiro.test(sites$sales[sites$version == '3'])
+```
+
+p-wartość dla każdej z trzech grup jest duża ( >0.05 ), dlatego mogę spokojnie przyjąć, że dane z każdej z grup pochodzą z rozkładu normalnego.
+
+Założenia analizy wariancji są spełnione, więc przystępuję do jej wykonania.
+
+
+Stosuję analizę wariancji do ilości sprzedanych telefonów z podziałem na sztuki sprzedane na danej wersji strony.
+
+```{r}
+summary(aov(sales ~ version, data=sites))
+```
+
+Otrzymana p-wartość jest bardzo mała, więc odrzucamy hipotezę zerową mówiącą, że średnia w każdej grupie jest taka sama.
+Sprawdźmy, czy na wykresie będą widoczne różnice między poszczególnymi grupami.
+
+
+```{r}
+ggplot(sites, aes(x=version, y=sales)) + geom_point(aes(color=version), position='jitter') + labs(title = 'Wykres punktowy ilości sprzedaży z podziałem na grupy', x='Numer wersji strony internetowej', y='Liczba sprzedanych telefonów') + theme(legend.position = 'none')
+```
+
+Na pierwszy rzut oka nie widać znaczących różnic, ale popatrzmy jak nasze dane będą prezentować się na wykresach pudełkowych.
+
+```{r}
+ggplot(sites, aes(x=version, y=sales)) + geom_boxplot() + labs(title = "Wykres pudełkowy ilości sprzedaży z podziałem na grupy", x='Numer wersji strony internetowej', y='Liczba sprzedanych telefonów')
+```
+
+Z tego wykresu można wywnioskować, że mediana ilości sprzedanych telefonów jest najwyższa w grupie drugiej. Aby mieć pewność że tak jest, stosuję procedurę Tukeya-Cramera.
+
+```{r}
+Tukey_buttons = TukeyHSD(aov(sales ~ version, data=sites))
+Tukey_buttons
+```
+
+Otrzymane p-wartości świadczą o istotnych dowodach na to, że istnieje różnica w średnich między wersjami 1 i 2 oraz 2 i 3. Zobaczmy jak wyglądają przedziały ufności dla różnic między średnimi.
+
+```{r}
+plot(Tukey_buttons)
+```
+
+Podsumowując, można stwierdzić że liczba sprzedaży w przypadku przycisku prostokątnego jest istostnie większa, średnio o około 24 sztuki w porówaniu do starej wersji przycisku. Nie ma za to istotnych dowodów, że przycisk okrągły generuje większą liczbę sprzedaży. Wybieramy zatem przycik prostokątny.
+
+
+
+
+
+# Zadanie 2
+
+Po waszym sukcesie dotyczącym wyboru szaty graficznej strony, zarząd "Firmy na A" postawił was przed kolejnym, trudniejszym zadaniem. Kolejną z branży, którą zajmuje się firma jest streaming video w internecie. Inżynierowie firmy stworzyli nową funkcjonalność autoodtwarzania, która ich zdaniem ma zwiększyć czas oglądania wideo podczas jednej sesji przez konkretnego użytkownika, a co za tym idzie zwiększyć przychody firmy z reklam. Ich zdaniem ta funkcjonalność szczególnie będzie działała na dzieci. Ponownie za pomocą metdologii testu A/B kierowali użytkowników z jednakowym prawdopodobieństwem na wersje strony z nowym odtwarzaczem lub ze starym. Za pomocą dwuczynnikowej analizy wariancji sprawdź, czy inżynierowie mieli racje.
+
+Opis danych:
+
+group - 1 - użytkownicy poniżej 16 roku życia, 2 - użytkownicy powyżej 16 roku życia, ale poniżej 40tego, 3 - użytkownicy powyżej 40 roku życia
+
+
+version - 1 - wersja ze starym odtwarzaczem, 2 - wersja z nowym odtwarzaczem
+
+
+time - czas w minutach spędzony na oglądaniu w danej sesji
+
+```{r}
+player <- readr::read_csv('zadanie2.csv')
+head(player)
+```
+
+```{r}
+player <- player %>% dplyr::mutate(group = as.character(group))
+player <- player %>% dplyr::mutate(version = as.character(version))
+```
+
+
+Zobaczmy wykresy pudełkowe dla czasu oglądania ze względu na grupę wiekową i wersję.
+
+
+```{r}
+ggplot(player, aes(x=group, y=time)) + geom_boxplot() + facet_wrap(~ version)
+```
+
+Widzimy, że wersja autoodtwarzacza nie ma znaczenia na czas oglądania.
+
+```{r}
+summary(aov(time ~ group + version, data = player))
+```
+
+Analiza wariancji potwierdziła, że nie ma różnicy między czasem oglądania a wersją odtwarzacza, jedynie między grupami wiekowymi.
+
+Podsumowując, pomysł inżynierów ze zmianą odtwarzacza okazał się być fiaskiem.
+
+
+# Zadanie 3
+
+Na podstawie waszej renomy zarząd "Firmy na A" powierzył wam najtrudniejsze do tej pory zadanie. Tym razem nie zdali wam bezpośrednio pytania, jedynie przedstawili dane, które zbierali inżynierowie odpowiedzialni za kolejną platformę firmy - dział przechowywania danych w chmurze. Platforma działa na zasadzie udostępniania darmowego miejsca z wolnym transferem i możliwości dokupowywania coraz większej ilości miejsca za pieniądze. Istnieje również subskrypcja, zwiększająca prędkość transferu. Waszym zadaniem jest - korzystając z przedstawionych danych przekazać do działu marketingu do jakiej grupy osób najlepiej skierować reklamy, aby kupowały dodatkowe miejsce w chmurze (wniosek wysnuć za pomocą analizy wariancji i jej uogólnień).
+
+Komentarz: Na potrzeby tego zadania przymujemy, że jeżeli osoba zajmuje dużo miejsca w swojej chmurze, to chętniej zapłaci za więcej miejsca (poprawność tego założenia samo w sobie jest ciekawym pytaniem, ale na ten moment nie zajmiemy się odpowiedzią na nie).
+
+
+Opis danych:
+
+sex - płeć
+
+paid - czy użytkownik posiada płatną subskrypcje, 0 - nie, 1 - tak
+
+agegrp - grupy wiekowe jak w zadaniu 2
+
+majoritydata - rodzaj danych zajmujących największą część miejsca posiadanego przez użytkownika, 1 - wideo, 2 - obrazy, 3 - muzyka, 4 - inne
+
+active - czy użytkownik był wgrywał jakieś pliki w przeciągu ostatnich 2 miesięcy, 0 - nie, 1 - tak
+
+used - ilość zajętego miejsca w chmurze (w GB)
+
+Przykład: Czy rodzaj danych przechowywanych przez użytkownika ma wpływ na ilość zajętego miejsca?
+
+
+```{r}
+storage <- readr::read_csv('zadanie3.csv')
+head(storage)
+```
+
+```{r}
+storage <- storage %>% dplyr::mutate(active = as.character(active))
+storage <-storage %>% dplyr::mutate(paid = as.character(paid))
+storage <-storage %>% dplyr::mutate(majoritydata = as.character(majoritydata))
+storage <-storage %>% dplyr::mutate(agegrp = as.character(agegrp))
+storage <-storage %>% dplyr::mutate(sex = as.character(sex))
+```
+
+
+
+```{r}
+summary(aov(used ~ active+paid+majoritydata+agegrp+sex, data=storage))
+```
+
+Za względu na to, że płeć oraz przedział wiekowy są czynnikami nieistotnym, pomijamy je w procedurze Tukey'a-Kramera.
+
+
+```{r}
+Tukey_cloud = TukeyHSD(aov(used ~ active+paid+majoritydata, data=storage))
+Tukey_cloud 
+```
+
+Aby lepiej móc zinterpretować wyniki, przedstawmy dane w postaci wykresów pudełkowych.
+
+
+```{r}
+ggplot(storage, aes(x=used, y=majoritydata)) + geom_boxplot() + facet_wrap(~paid)
+```
+
+```{r}
+ggplot(storage, aes(x=used, y=majoritydata)) + geom_boxplot() + facet_wrap(~active)
+```
+
+Wnosek końcowy jest następujący: reklamy należy skierować w pierwszej kolejności do osób u których największą powierzchnię na dysku zajmuje wideo. To, czy dana osoba ma wykupioną subskrypcję nie ma znaczenia, ani to czy jest użytkownikiem aktywnym czy nie.
+
+
+
+
