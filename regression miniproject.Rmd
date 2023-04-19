@@ -1,0 +1,213 @@
+---
+title: "projekt_R_czesc_1_regresja"
+output: html_document
+---
+
+Będziemy pracować na danych z biblioteki MASS dotyczących kotów. Dane składają się z 144 próbek, każda próbka zawiera informacje o płci kota (zmienna Sex - 'F' albo 'M'), jego masie ciała w kilogramach (zmienna Bwt) i masie jego serca w gramach (zmienna Hwt). Dane dotyczą dorosłych kotów o masie ciała powyżej 2 kg.
+
+
+```{r}
+library(MASS)
+data(cats)
+
+head(cats)
+```
+
+Celem pierwszej części naszej analizy jest sprawdzenie za pomocą regresji liniowej prostej, jak dobrze można przewidzeć masę serca kota na podstawie wiedzy o jego masie ciała. Zauważmy, że taka wiedza może być przydatna w weterynarii, gdyż kota jest łatwo zważyć, a jego serce raczej trudno.
+
+Sprawdzimy najpierw, czy dane o masach kotów oraz masach ich serc mają rozkłady zbliżone do normalnego.
+
+Histogram mas kotów:
+
+```{r}
+hist(cats$Bwt)
+``` 
+Sprawdzenie czy dane mogą pochodzić z rozkładu normalnego.
+
+```{r}
+shapiro.test(cats$Bwt)
+``` 
+
+Dane raczej nie pochodzą z rokładu normalnego.
+
+Histogram mas serc kotów:
+
+```{r}
+hist(cats$Hwt)
+``` 
+```{r}
+shapiro.test(cats$Hwt)
+``` 
+
+I w tym przypadku nie mamy normalności danych.
+
+
+W obu przypadkach widzimy, że rozkłady nie przypominają rozkładu normalnego, dlatego zastosujemy do obu zestawów danych funkcję logarytm.
+
+
+```{r}
+log_Bwt = log(cats$Bwt)
+log_Hwt = log(cats$Hwt)
+``` 
+
+Sprawdźmy, czy teraz rozkłady cech bardziej przypominają rozkład normalny.
+
+```{r}
+hist(log_Bwt)
+``` 
+
+```{r}
+hist(log_Hwt)
+``` 
+
+Jest zauważalnie lepiej. Na podstawie histogramu logarytmu masy serca widzmy obecność elementu odstającego po prawej stronie, jednak na razie go zignorujmy, wyeliminujemy go budując drugi model. Przechodzimy zatem do dalszej analizy.
+
+Zbudujmy pierwszy model regresji liniowej prostej dla naszych danych, za zmienną objaśnianą przyjmując masę serca kota.
+
+```{r}
+first_model <- lm(log_Hwt ~ log_Bwt)
+summary(first_model)
+```
+
+Oba współczynniki obecne w modelu są bardzo istotne, a udało nam się wyjaśnić 63% wariancji w danych. Jest to niezły wynik, chociaż mogłoby być lepiej.
+
+Zobaczmy jak wygląda nasza chmura punktów naniesiona na płaszczyznę oraz jak wygląda krzywa regresji.
+
+```{r}
+plot(log_Bwt,log_Hwt)
+abline(first_model)
+```
+
+Widzimy ewidentny trend liniowy oraz nie tak znowu duży rozrzut wokół prostej regresji.
+
+Popatrzmy teraz na wykres rozrzutu reszt w naszym modelu.
+
+```{r}
+plot(first_model, which=1)
+```
+
+Widzimy, że wariancja reszt jest w miarę stała, zatem wstępnie wnioskujemy o homoskedastyczności reszt. Podobnie, na podstawie wykresu można wstępnie powiedzieć, że średnia reszt jest równa zero. Przeprowadźmy teraz odpowiednie testy aby się o tym przekonać.
+
+Najpierw zajmijmy się normalnością reszt. Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(first_model$residuals)
+```
+
+Duża p-wartość sugeruje, że dane mają w przybliżeniu rozkład normalny. Aby dopełnić obowiązku sprawdzania normalności reszt zerknijmy na QQ-plot.
+
+```{r}
+plot(first_model, which=2)
+```
+
+Otrzymany wykres potwierdza wynik testu Shapiro-Wilka i świadczy o normalności reszt.
+
+Następnie sprawdzamy, czy średnia reszt jest równa zero z pomocą testu t-Studenta.
+
+```{r}
+t.test(first_model$residuals)
+```
+
+P-wartość jest bardzo duża, zatem otrzymujemy potwierdzenie tego, co widzeliśmy wcześniej na wykresie rozrzutu reszt - średnia reszt jest w przybliżeniu równa zero.
+
+Kolejno sprawdźmy niezależność reszt jestem Durbina-Watsona.
+
+```{r}
+lmtest::dwtest(first_model)
+```
+
+Otrzymana p-wartość świadczy o obecności autokorelacji w danych, czyli założenie o niezależności reszt jest niestety złamane.
+
+Sprawdźmy jeszcze za pomocą testu Breusch-Pagan, czy reszty na pewno są homoskedastyczne.
+
+```{r}
+lmtest::bptest(first_model)
+```
+
+Duża p-wartość przemawia za tezą, że są.
+
+
+Podsumowując, za pomocą naszego modelu jesteśmy w stanie wyjaśnić około 60% wariancji w danych, co jest całkiem niezłym wynikiem. Założenia modelu regresji liniowej również są spełnione w zadowalający sposób.
+
+
+
+
+Sprawdżmy teraz, czy eliminacja elementu odstającego w zmiennej log_Hwt pomoże nam ulepszyć model.
+Ponieważ element odstający znajduje się w wierszu nr 144 wyrzucamy go z ramki danych i przypisujemy zlogatytmowane wartości do zmiennych.
+
+
+
+```{r}
+log_Hwt_2 <- log(cats[-144,]$Hwt)
+log_Bwt_2 <- log(cats[-144,]$Bwt)
+```
+
+Budujemy drugi model bez elementu odstającego.
+
+```{r}
+second_model <- lm(log_Hwt_2 ~ log_Bwt_2)
+summary(second_model)
+```
+
+Nastąpiła ciekawa rzecz - drugi model jest minimalnie gorszy od pierwszego. Zostawiamy go zatem i przechodzimy do budowania modelu regresji wielokrakiej przez umieszczenie w modelu informacji o płci badanego kota.
+W dalszej części będziemy pracować z, najwyraźniej potrzebnym, elementem odstającym.
+
+
+```{r}
+third_model <- lm(log_Hwt ~ log_Bwt + cats$Sex)
+summary(third_model)
+```
+
+Okazuje się, że płeć kota nie jest informacją istotną w naszym modelu, co jest rzeczą dosyć ciekawą i niespodziewaną, gdyż można by przypuszczać, że samce będą posiadać masywniejsze serca od samic i pomoże to w predykcji masy serca kota, ale nasz model na to nie wskazuje. Jest to z pewnością rzecz warta dalszego badania i konsultacji ze specjalistami z dziedziny anatomii kota.
+
+
+
+
+
+
+
+
+
+Aby dowiedzieć się czegoś więcej na temat różnic pomiędzy samcami i samicami dorosłych kotów zobaczmy jak masa ciała oraz masa serca wyglądają na wykresie punktowym oraz na wykresach pudełkowych w przypadku obu płci.
+
+
+```{r}
+library(tidyverse)
+
+ggplot(cats, aes(x=Sex, y=Hwt)) + geom_point(aes(color=Sex), position='jitter') + labs(title = 'Wykres punktowy masy serca kota z podziałem na płeć', x='Płeć kota', y='Masa serca kota w gramach') + theme(legend.position = 'none')
+```
+
+```{r}
+ggplot(cats, aes(x=Sex, y=Hwt)) + geom_boxplot() + labs(title = "Wykres pudełkowy masy serca kota z podziałem na płeć", x='Płeć kota', y='Masa serca kota')
+```
+
+
+
+
+```{r}
+ggplot(cats, aes(x=Sex, y=Bwt)) + geom_point(aes(color=Sex), position='jitter') + labs(title = 'Wykres punktowy masy ciała kota z podziałem na płeć kota', x='Płeć kota', y='Masa ciała kota w kilogramach') + theme(legend.position = 'none')
+```
+
+```{r}
+ggplot(cats, aes(x=Sex, y=Bwt)) + geom_boxplot() + labs(title = "Wykres pudełkowy masy ciała kota z podziałem na płeć", x='Płeć kota', y='Masa kota')
+```
+
+Ostatnią częścią tej analizy będzie wykonanie testu Welscha w celu potwierdzenia lub zaprzeczenia temu, że średnie w obu grupach są takie same. Na podstawie wykresów można śmiało stwierdzić, że nie są, jednak wykonajmy test. Co prawda test t Welscha wymaga, aby rozkład cechy w obu porównywanych populacjach był normalny, przeprowadzimy go mając świadomość naruszenia tego założenia.
+
+
+```{r}
+t.test(cats$Hwt[cats$Sex == 'M'] ,cats$Hwt[cats$Sex == 'F'])
+```
+
+Test potwierdza, że średnie masy serca samców i samic kota różnią się. Z otrzymanego przedziału ufności dla różnicy średnich wnioskujemy, że serce samca jest cięższe o około 2 gramy.
+
+Zobaczmy jak sprawy się mają w przypadku masy ciała.
+
+
+```{r}
+t.test(cats$Bwt[cats$Sex == 'M'] ,cats$Bwt[cats$Sex == 'F'])
+```
+
+Tym razem p-wartość jest jeszcze mniejsza, co pozwala nam odrzucić hipotezę zerową mówiącą o równości średnich. Różnica między średnimi masami ciała samic i samców wynosi około pół kilograma.
+
+
