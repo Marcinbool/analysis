@@ -1,0 +1,80 @@
+---
+title: "Regresja i analiza wariancji - Sprawozdanie 3"
+author:
+  name: Marcin Ból
+  affiliation: Politechnika Krakowska
+subtitle: Metody klasyfikacji - sprawozdanie
+output:
+  html_document:
+    df_print: paged
+---
+
+# Termin oddania : Wtorek 31.05.2022 23:59
+
+# Zadanie
+
+W pliku 'banknotes.csv' znadjują się dane opisujące obrazy banknotów. Dane powstały poprzez transformatę falkową (wavelet transform) zastosowaną do obrazów w skali szarości rozmiaru 400x400 pikseli. Po zastosowaniu transformaty wyliczono cztery charakterystyki liczbowe obrazu - wariancję, skośność, kurtozę oraz entropię. 
+
+Za pomocą modelu regresji logistycznej sprawdź czy za pomocą tej metody jesteśmy w stanie dobrze odróżnić banknoty prawdziwe od fałszywych. 
+
+ - Zbuduj i zinterpretuj model regresji logistycznej (w razie otrzymania ostrzeżenia od software'u stosownie należy je skomentować, ale się nim nie przejmować).
+ - Zbadaj i zinterpretuj jego charakterystyki liczbowe za pomocą macierzy pomyłek.
+ - Wyrysuj krzywą ROC otrzymanego modelu i podaj AUC. Zinterpretuj otrzymane wyniki.
+
+```{r}
+library(tidyverse)
+library(caret)
+library(ggfortify)
+```
+```{r}
+bank <- readr::read_csv('banknote.csv', col_names = FALSE)
+head(bank)
+```
+
+Sprawdźmy, czy mamy mniej więcej tyle samo elementów z klasy 0 co z klasy 1.
+
+```{r}
+table(bank$X5)
+```
+
+Odpowiedź jest pozytywna, więc przejdźmy do podziału naszego zbioru danych na zbiór treningowy i zbiór testowy.
+
+```{r}
+train_test_split <- createDataPartition(bank$X5, list = FALSE, p=0.75)
+bank_train <- bank[train_test_split,]
+bank_test <- bank[-train_test_split,]
+```
+
+Budujemy model regresji logistycznej.
+
+```{r}
+logistic <-glm(X5 ~. ,data=bank_train, family = "binomial")
+summary(logistic)
+```
+
+Wszystkie współczynniki w modelu są istotne, co bardzo cieszy. Przechodzimy do sprawdzenia jak model radzi sobie na zbiorze testowym i na tej podstawie tworzymy macierz pomyłek.
+
+```{r}
+pred <- predict(logistic, bank_test, type = 'response')
+predc <- ifelse(pred > 0.5, 1, 0) 
+confusionMatrix(factor(predc), factor(bank_test$X5))
+```
+
+Model jest zaskakująco dobry - dokładność wynosi aż 98,83%. Sprawdźmy jak wygląda w tym przypadku krzywa ROC.
+
+```{r}
+roc <- pROC::roc(response = bank_test$X5, predictor = pred)
+roc
+```
+
+```{r}
+pROC::ggroc(roc, legacy.axes = TRUE) + geom_abline(slope = 1, intercept = 0)
+```
+
+Krzywa ROC świadczy o tym, że nasz model jest prawie idealny.
+
+```{r}
+roc$auc
+```
+
+Potwierdza to również współczynnik AUC, który wynosi prawie 1.
